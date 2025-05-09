@@ -85,35 +85,27 @@ public class MapGenerator
     private void CreateSlopes(double slopeProbability)
     {
         bool slopesWereMadeThisPass;
-        // 最大迭代次数，防止无限循环，也间接控制了能搭建的“楼梯”的最大高度差
-        int maxIterations = this._maxPlatformHeightForSlopeGeneration + 2; // +2 作为一些缓冲
-        int iterations = 0;
+        var maxIterations = _maxPlatformHeightForSlopeGeneration + 2; // Buffer
+        var iterations = 0;
 
         do
         {
             slopesWereMadeThisPass = false;
             iterations++;
 
-            for (int y = 0; y < HeightMap; y++)
+            for (var y = 0; y < HeightMap; y++)
             {
-                for (int x = 0; x < Width; x++)
+                for (var x = 0; x < Width; x++)
                 {
-                    Tile currentTile = Tiles[x, y];
-
-                    // 斜坡只能从 TileType.Ground 的地块开始延伸
-                    if (currentTile.Type == TileType.Slope || currentTile.Type != TileType.Ground)
+                    var currentTile = Tiles[x, y];
+                    
+                    if (currentTile.Type is TileType.Slope or not TileType.Ground)
                     {
                         continue;
                     }
 
-                    int[] dx = { 0, 1, 0, -1 }; // 邻居相对于当前: X方向偏移 (北边的邻居X不变, 东边的邻居X+1, 南边的X不变, 西边的X-1)
-                    int[] dy = { -1, 0, 1, 0 }; // 邻居相对于当前: Y方向偏移 (北边的邻居Y-1, 东边的Y不变, 南边的Y+1, 西边的Y不变)
-                                                // Unity中Y向上通常为正，这里是数组索引，Y向下为正
-                                                // 我们的SlopeDirection语义是“斜坡向下指向的方向”
-                                                // (0, -1) 是北方邻居，若斜坡向北，则SlopeDir=North
-                                                // (1,  0) 是东方邻居，若斜坡向东，则SlopeDir=East
-                                                // (0,  1) 是南方邻居，若斜坡向南，则SlopeDir=South
-                                                // (-1, 0) 是西方邻居，若斜坡向西，则SlopeDir=West
+                    int[] dx = { 0, 1, 0, -1 }; 
+                    int[] dy = { -1, 0, 1, 0 }; 
                     SlopeDirection[] directions = { SlopeDirection.North, SlopeDirection.East, SlopeDirection.South, SlopeDirection.West };
 
                     for (int i = 0; i < 4; i++) 
@@ -125,7 +117,7 @@ public class MapGenerator
                         {
                             Tile neighborTile = Tiles[neighborX, neighborY];
 
-                            if (currentTile.Height == neighborTile.Height + 1) // 标准1-unit slope
+                            if (currentTile.Height == neighborTile.Height + 1) // 1-unit slope
                             {
                                 if (_random.NextDouble() < slopeProbability)
                                 {

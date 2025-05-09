@@ -423,14 +423,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   mapWidth: 100
   mapDepth: 100
-  numberOfPlatforms: 20
+  numberOfPlatforms: 50
   minPlatformWidth: 3
   maxPlatformWidth: 8
   minPlatformLength: 3
   maxPlatformLength: 8
   minPlatformHeight: 1
-  maxPlatformHeight: 50
-  slopeProbability: 0.9
+  maxPlatformHeight: 30
+  slopeProbability: 0.5
   groundTilePrefab: {fileID: 144001084732454522, guid: 180d85a51e5a7b9419247d8773e08e62, type: 3}
   slopeTilePrefab: {fileID: 8687657281634181632, guid: 53df217cd5d2b8941a8013acf4c0430d, type: 3}
   tileSpacing: 1
