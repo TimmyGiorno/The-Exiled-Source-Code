@@ -421,18 +421,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a73eeb603db88f549922e76ae8c59584, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mapWidth: 100
-  mapDepth: 100
-  numberOfPlatforms: 50
+  mapWidth: 75
+  mapDepth: 75
+  numberOfPlatforms: 30
   minPlatformWidth: 3
   maxPlatformWidth: 8
   minPlatformLength: 3
   maxPlatformLength: 8
   minPlatformHeight: 1
-  maxPlatformHeight: 30
-  slopeProbability: 0.5
+  maxPlatformHeight: 10
+  stairProbability: 0.45
   groundTilePrefab: {fileID: 144001084732454522, guid: 180d85a51e5a7b9419247d8773e08e62, type: 3}
-  slopeTilePrefab: {fileID: 8687657281634181632, guid: 53df217cd5d2b8941a8013acf4c0430d, type: 3}
+  stairTilePrefab: {fileID: 8153039646197318604, guid: b73d74b298bc2184c90dcef5ebfd54e0, type: 3}
   tileSpacing: 1
   heightStep: 0.5
 --- !u!4 &1409756107

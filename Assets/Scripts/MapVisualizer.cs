@@ -1,69 +1,63 @@
+// MapVisualizer.cs
 using UnityEngine;
-// 如果 Tile.cs 和 MapGenerator.cs 在 namespace 中，确保 using
-using RandomMapGenerator; // 假设 Tile.cs 和 MapGenerator.cs 都在这个 namespace
+using RandomMapGenerator; // 确保引用
 
 public class MapVisualizer : MonoBehaviour
 {
     [Header("Map Dimensions")]
     public int mapWidth = 30;
-    public int mapDepth = 20; // 使用 Depth 对应我们逻辑中的 HeightMap (地图的Y轴长度)
+    public int mapDepth = 20;
 
     [Header("Platform Generation")]
     public int numberOfPlatforms = 10;
     public int minPlatformWidth = 3;
     public int maxPlatformWidth = 8;
-    public int minPlatformLength = 3; // 对应地图的 depth/Y方向
+    public int minPlatformLength = 3;
     public int maxPlatformLength = 8;
-    public int minPlatformHeight = 1;
+    public int minPlatformHeight = 1; // 平台高度至少为1
     public int maxPlatformHeight = 3;
 
     [Header("Generation Settings")]
-    public double slopeProbability = 0.75;
-    public int? mapSeed = null; // int? 表示可为空的整数。如果为null，则随机种子
+    public double stairProbability = 0.75; // 重命名 slopeProbability
+    public int? mapSeed = null;
 
     [Header("Visuals")]
-    public GameObject groundTilePrefab; // 用于普通地面和平台顶部的预制件
-    public GameObject slopeTilePrefab;  // 用于斜坡的预制件 (可选，可以先用groundTilePrefab代替)
-    public float tileSpacing = 1.0f; // 地块之间的间隔 (通常是地块的大小)
-    public float heightStep = 0.5f;  // 每一个高度单位在Y轴上的实际距离
+    public GameObject groundTilePrefab;
+    public GameObject stairTilePrefab;  // << 新增：楼梯预制件
+    public float tileSpacing = 1.0f;
+    public float heightStep = 0.5f;
 
     private MapGenerator _mapGenerator;
-    private GameObject _mapContainer; // 用于存放所有生成的地块，方便管理
+    private GameObject _mapContainer;
 
     void Start()
     {
         GenerateAndDisplayMap();
     }
 
-    // 也可以做一个按钮，在编辑器模式下点击生成
-    [ContextMenu("Generate and Display Map")] // 这会在 Inspector 中添加一个右键菜单项
+    [ContextMenu("Generate and Display Map")]
     public void GenerateAndDisplayMap()
     {
-        // 清理旧地图 (如果存在)
         if (_mapContainer != null)
         {
-            DestroyImmediate(_mapContainer); // 使用 DestroyImmediate 如果在编辑器模式下调用
+            DestroyImmediate(_mapContainer);
         }
         _mapContainer = new GameObject("GeneratedMapContainer");
-        _mapContainer.transform.SetParent(this.transform); // 将容器作为此对象的子对象
+        _mapContainer.transform.SetParent(this.transform);
 
-        // 初始化生成器
-        _mapGenerator = new MapGenerator(mapWidth, mapDepth, mapSeed); // 使用 mapDepth
+        _mapGenerator = new MapGenerator(mapWidth, mapDepth, mapSeed);
 
-        // 生成地图数据
         _mapGenerator.GenerateMap(
             numberOfPlatforms,
             minPlatformWidth, maxPlatformWidth,
             minPlatformLength, maxPlatformLength,
             minPlatformHeight, maxPlatformHeight,
-            slopeProbability
+            stairProbability // 使用 stairProbability
         );
 
-        // 可视化地图
         DisplayMap();
     }
 
-    
     void DisplayMap()
     {
         if (_mapGenerator == null || _mapGenerator.Tiles == null)
@@ -71,126 +65,103 @@ public class MapVisualizer : MonoBehaviour
             Debug.LogError("Map data not generated!");
             return;
         }
-
         if (groundTilePrefab == null)
         {
-            Debug.LogError("Ground Tile Prefab not assigned in MapVisualizer!");
+            Debug.LogError("Ground Tile Prefab not assigned!");
+            return;
+        }
+        if (stairTilePrefab == null) 
+        {
+            Debug.LogError("Stair Tile Prefab not assigned!");
             return;
         }
 
         float mapHalfWidth = _mapGenerator.Width / 2.0f;
         float mapHalfDepth = _mapGenerator.HeightMap / 2.0f;
 
-        for (int y = 0; y < _mapGenerator.HeightMap; y++)
+        // 定义你想要的灰色
+        Color desiredGrayColor = Color.gray; // 或者 new Color(0.6f, 0.6f, 0.6f) 等自定义灰色
+
+        for (int y = 0; y < _mapGenerator.HeightMap; y++) 
         {
             for (int x = 0; x < _mapGenerator.Width; x++)
             {
                 Tile currentTileData = _mapGenerator.Tiles[x, y];
+                GameObject tilePrefabToUse = null;
+                Quaternion tileRotation = Quaternion.identity;
 
-                // 确定顶层地块使用的预制件
-                GameObject topTilePrefabToUse = groundTilePrefab;
-                if (currentTileData.Type == TileType.Slope && slopeTilePrefab != null)
+                if (currentTileData.Type == TileType.Ground)
                 {
-                    topTilePrefabToUse = slopeTilePrefab;
+                    tilePrefabToUse = groundTilePrefab;
                 }
-                else if (currentTileData.Type == TileType.Empty)
+                else if (currentTileData.Type == TileType.Stair)
                 {
-                    continue; // 如果是 Empty 类型，不创建任何对象
+                    tilePrefabToUse = stairTilePrefab;
+                    switch (currentTileData.Direction)
+                    {
+                        case StairDirection.North: 
+                            tileRotation = Quaternion.Euler(0, 180f, 0);
+                            break;
+                        case StairDirection.East:  
+                            tileRotation = Quaternion.Euler(0, 90f, 0);
+                            break;
+                        case StairDirection.South: 
+                            tileRotation = Quaternion.Euler(0, 0, 0); 
+                            break;
+                        case StairDirection.West:  
+                            tileRotation = Quaternion.Euler(0, -90f, 0);
+                            break;
+                    }
                 }
+                else if (currentTileData.Type == TileType.Empty) 
+                {
+                    continue;
+                }
+                
+                if (tilePrefabToUse == null) continue;
 
-                // 计算顶层地块的世界坐标
-                Vector3 topPosition = new Vector3(
+                Vector3 tileBasePosition = new Vector3(
                     (x - mapHalfWidth + 0.5f) * tileSpacing,
-                    currentTileData.Height * heightStep,
-                    (y - mapHalfDepth + 0.5f) * tileSpacing
+                    currentTileData.Height * heightStep, 
+                    (y - mapHalfDepth + 0.5f) * tileSpacing  
                 );
 
-                // 实例化顶层地块
-                GameObject topTileInstance = Instantiate(topTilePrefabToUse, topPosition, Quaternion.identity);
-                topTileInstance.transform.SetParent(_mapContainer.transform);
-                topTileInstance.name = $"Tile_{x}_{y}_Top (H:{currentTileData.Height}, T:{currentTileData.Type})";
-
-                // --- 外观调整 (顶层地块) ---
-                Renderer topTileRenderer = topTileInstance.GetComponent<Renderer>();
-                if (topTileRenderer != null)
+                GameObject tileInstance = Instantiate(tilePrefabToUse, tileBasePosition, tileRotation);
+                tileInstance.transform.SetParent(_mapContainer.transform);
+                tileInstance.name = $"Tile_{x}_{y} (H:{currentTileData.Height}, T:{currentTileData.Type}, Dir:{currentTileData.Direction})";
+                
+                // --- 外观调整: 所有顶层地块统一为灰色 ---
+                Renderer tileRenderer = tileInstance.GetComponent<Renderer>();
+                if (tileRenderer != null)
                 {
-                    if (currentTileData.Type == TileType.Ground)
-                    {
-                        float hue = (currentTileData.Height % maxPlatformHeight) / (float)maxPlatformHeight;
-                        topTileRenderer.material.color = Color.HSVToRGB(0.3f + hue * 0.2f, 0.7f, 0.8f);
-                    }
-                    else if (currentTileData.Type == TileType.Slope)
-                    {
-                        if (slopeTilePrefab == null)
-                        {
-                            topTileRenderer.material.color = Color.yellow;
-                            // 旋转以匹配斜坡方向
-                            Quaternion slopeRotation = Quaternion.identity;
-                            switch (currentTileData.SlopeDir)
-                            {
-                                case SlopeDirection.North:
-                                    slopeRotation = Quaternion.Euler(20, 0, 0);
-                                    break;
-                                case SlopeDirection.East:
-                                    slopeRotation = Quaternion.Euler(0, 0, -20);
-                                    break;
-                                case SlopeDirection.South:
-                                    slopeRotation = Quaternion.Euler(-20, 0, 0);
-                                    break;
-                                case SlopeDirection.West:
-                                    slopeRotation = Quaternion.Euler(0, 0, 20);
-                                    break;
-                            }
-                            topTileInstance.transform.rotation = slopeRotation;
-                        }
-                        else
-                        {
-                            // 旋转斜坡预制件以匹配方向
-                            Quaternion slopeRotation = Quaternion.identity;
-                            switch (currentTileData.SlopeDir)
-                            {
-                                case SlopeDirection.North:
-                                    slopeRotation = Quaternion.Euler(0, 180, 0);
-                                    break;
-                                case SlopeDirection.East:
-                                    slopeRotation = Quaternion.Euler(0, -90, 0);
-                                    break;
-                                case SlopeDirection.South:
-                                    break;
-                                case SlopeDirection.West:
-                                    slopeRotation = Quaternion.Euler(0, 90, 0);
-                                    break;
-                            }
-                            topTileInstance.transform.rotation = slopeRotation;
-                        }
-                    }
+                    tileRenderer.material.color = desiredGrayColor; // 设置为统一的灰色
                 }
 
-                // 向下生成支撑地块
-                if (currentTileData.Height > 0) // 如果高度大于 0，说明不是最底层
+                // --- 生成支撑方块 ---
+                if (currentTileData.Height > 0)
                 {
-                    for (int h = 0; h < currentTileData.Height; h++)
+                    for (int h_support = 0; h_support < currentTileData.Height; h_support++)
                     {
                         Vector3 supportPosition = new Vector3(
-                            (x - mapHalfWidth + 0.5f) * tileSpacing,
-                            h * heightStep, // 支撑地块的高度从 0 开始，直到顶层地块的高度 - 1
-                            (y - mapHalfDepth + 0.5f) * tileSpacing
+                            tileBasePosition.x,     
+                            h_support * heightStep, 
+                            tileBasePosition.z      
                         );
 
                         GameObject supportTileInstance = Instantiate(groundTilePrefab, supportPosition, Quaternion.identity);
                         supportTileInstance.transform.SetParent(_mapContainer.transform);
-                        supportTileInstance.name = $"Tile_{x}_{y}_Support_H{h}";
-
-                        // --- 外观调整 (支撑地块，可以与顶层不同) ---
-                        Renderer supportTileRenderer = supportTileInstance.GetComponent<Renderer>();
-                        if (supportTileRenderer != null)
+                        supportTileInstance.name = $"Tile_{x}_{y}_Support_H{h_support}";
+                        
+                        Renderer supportRenderer = supportTileInstance.GetComponent<Renderer>();
+                        if (supportRenderer != null)
                         {
-                            supportTileRenderer.material.color = new Color(0.5f, 0.5f, 0.5f); // 例如，灰色表示支撑
+                             // --- 外观调整: 所有支撑地块统一为灰色 ---
+                            supportRenderer.material.color = desiredGrayColor; // 设置为统一的灰色
                         }
                     }
                 }
             }
         }
-        Debug.Log("Map displayed with support!");
+        Debug.Log("Map displayed with all tiles in gray!");
     }
 }

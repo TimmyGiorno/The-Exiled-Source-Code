@@ -1,15 +1,14 @@
 // MapGenerator.cs
 using System;
-// 确保你的 Tile 类和相关枚举在正确的命名空间下，或者移除/调整 using 语句
-using RandomMapGenerator; // 假设你的 Tile.cs 和枚举在这个命名空间
+using System.Linq;
+using RandomMapGenerator; // 确保这个 using 是正确的
 
 public class MapGenerator
 {
     public int Width { get; }
-    public int HeightMap { get; } // 地图的“深度”或Y轴格子数
+    public int HeightMap { get; }
     public Tile[,] Tiles { get; private set; }
     private Random _random;
-    private int _maxPlatformHeightForSlopeGeneration; // 用于存储最大平台高度，供CreateSlopes参考
 
     public MapGenerator(int width, int heightMap, int? seed = null)
     {
@@ -23,15 +22,14 @@ public class MapGenerator
         int numberOfPlatforms,
         int minPlatformWidth, int maxPlatformWidth,
         int minPlatformLength, int maxPlatformLength,
-        int minPlatformHeight, int actualMaxPlatformHeight, // 将参数重命名以区分
-        double slopeProbability)
+        int minPlatformHeight, int actualMaxPlatformHeight,
+        double stairProbability)
     {
-        // 存储最大平台高度，供 CreateSlopes 方法使用
-        _maxPlatformHeightForSlopeGeneration = actualMaxPlatformHeight;
-
         InitializeTiles();
         CreatePlatforms(numberOfPlatforms, minPlatformWidth, maxPlatformWidth, minPlatformLength, maxPlatformLength, minPlatformHeight, actualMaxPlatformHeight);
-        CreateSlopes(slopeProbability);
+        
+        int maxIterations = Math.Max(3, actualMaxPlatformHeight + 2); 
+        CreateStairsIterative(stairProbability, maxIterations);
     }
 
     private void InitializeTiles()
@@ -43,7 +41,8 @@ public class MapGenerator
                 Tiles[x, y] = new Tile(x, y)
                 {
                     Height = 0,
-                    Type = TileType.Ground
+                    Type = TileType.Ground,
+                    Direction = StairDirection.None
                 };
             }
         }
@@ -61,90 +60,118 @@ public class MapGenerator
             var platformLength = _random.Next(minPlatformLength, maxPlatformLength + 1);
             var platformHeight = _random.Next(Math.Max(1, minPlatformHeight), actualMaxPlatformHeight + 1);
             
-            // Edge Condition
             if (platformWidth <= 0 || platformLength <= 0) continue;
             if (Width - platformWidth < 0 || HeightMap - platformLength < 0) continue;
             
-            // Select Start Point
             var startX = _random.Next(0, Width - platformWidth + 1);
             var startY = _random.Next(0, HeightMap - platformLength + 1);
 
-            for (var y = startY; y < startY + platformLength; y++)
+            for (var y_plat = startY; y_plat < startY + platformLength; y_plat++)
             {
-                for (var x = startX; x < startX + platformWidth; x++)
+                for (var x_plat = startX; x_plat < startX + platformWidth; x_plat++)
                 {
-                    // Overwrite
-                    Tiles[x, y].Height = platformHeight;
-                    Tiles[x, y].Type = TileType.Ground; 
-                    Tiles[x, y].SlopeDir = SlopeDirection.None;
+                    Tiles[x_plat, y_plat].Height = platformHeight;
+                    Tiles[x_plat, y_plat].Type = TileType.Ground; 
+                    Tiles[x_plat, y_plat].Direction = StairDirection.None;
                 }
             }
         }
     }
 
-    private void CreateSlopes(double slopeProbability)
+    private void CreateStairsIterative(double stairProbability, int maxIterations)
     {
-        bool slopesWereMadeThisPass;
-        var maxIterations = _maxPlatformHeightForSlopeGeneration + 2; // Buffer
-        var iterations = 0;
+        bool changesMadeThisPass;
+        int iterations = 0;
 
         do
         {
-            slopesWereMadeThisPass = false;
+            changesMadeThisPass = false;
             iterations++;
 
-            for (var y = 0; y < HeightMap; y++)
+            for (int y_curr = 0; y_curr < HeightMap; y_curr++)
             {
-                for (var x = 0; x < Width; x++)
+                for (int x_curr = 0; x_curr < Width; x_curr++)
                 {
-                    var currentTile = Tiles[x, y];
+                    Tile currentTile = Tiles[x_curr, y_curr];
+                    bool currentTileWasModifiedIntoStair = false; // 用于标记 currentTile 本身是否在本轮邻居检查中变成了楼梯
+
+                    var neighborChecks = new[]
+                    {
+                        new { dx = 0, dy = -1, dirToNeighbor = StairDirection.North, dirFromNeighbor = StairDirection.South },
+                        new { dx = 1, dy = 0,  dirToNeighbor = StairDirection.East,  dirFromNeighbor = StairDirection.West  },
+                        new { dx = 0, dy = 1,  dirToNeighbor = StairDirection.South, dirFromNeighbor = StairDirection.North },
+                        new { dx = -1, dy = 0, dirToNeighbor = StairDirection.West,  dirFromNeighbor = StairDirection.East  }
+                    };
                     
-                    if (currentTile.Type is TileType.Slope or not TileType.Ground)
+                    var randomizedChecks = neighborChecks.OrderBy(_ => _random.Next()).ToList();
+
+                    foreach (var check in randomizedChecks)
                     {
-                        continue;
-                    }
+                        int nx = x_curr + check.dx;
+                        int ny = y_curr + check.dy;
 
-                    int[] dx = { 0, 1, 0, -1 }; 
-                    int[] dy = { -1, 0, 1, 0 }; 
-                    SlopeDirection[] directions = { SlopeDirection.North, SlopeDirection.East, SlopeDirection.South, SlopeDirection.West };
-
-                    for (int i = 0; i < 4; i++) 
-                    {
-                        int neighborX = x + dx[i];
-                        int neighborY = y + dy[i];
-
-                        if (neighborX >= 0 && neighborX < Width && neighborY >= 0 && neighborY < HeightMap)
+                        if (nx >= 0 && nx < Width && ny >= 0 && ny < HeightMap)
                         {
-                            Tile neighborTile = Tiles[neighborX, neighborY];
+                            Tile neighborTile = Tiles[nx, ny];
 
-                            if (currentTile.Height == neighborTile.Height + 1) // 1-unit slope
+                            // 情况1: currentTile (较低的) 尝试成为楼梯，连接到 neighborTile (较高的锚点)
+                            // currentTile 必须是 Ground 才能变成楼梯。
+                            // neighborTile (锚点) 可以是 Ground 或另一个 Stair (连接到其底部)。
+                            if (currentTile.Type == TileType.Ground && currentTile.Height < neighborTile.Height &&
+                                (neighborTile.Type == TileType.Ground || neighborTile.Type == TileType.Stair))
                             {
-                                if (_random.NextDouble() < slopeProbability)
+                                if (_random.NextDouble() < stairProbability)
                                 {
-                                    currentTile.Type = TileType.Slope;
-                                    currentTile.SlopeDir = directions[i];
-                                    slopesWereMadeThisPass = true;
-                                    break; 
+                                    if (neighborTile.Height == currentTile.Height + 1) // 正好一级落差
+                                    {
+                                        currentTile.Type = TileType.Stair;
+                                        currentTile.Direction = check.dirToNeighbor;
+                                        changesMadeThisPass = true;
+                                        currentTileWasModifiedIntoStair = true;
+                                    }
+                                    else if (neighborTile.Height > currentTile.Height + 1) // 落差大于一级
+                                    {
+                                        currentTile.Height = neighborTile.Height - 1; // 抬高 currentTile 地基
+                                        currentTile.Type = TileType.Stair;            // 在新地基上放楼梯
+                                        currentTile.Direction = check.dirToNeighbor;
+                                        changesMadeThisPass = true;
+                                        currentTileWasModifiedIntoStair = true;
+                                    }
                                 }
                             }
-                            else if (currentTile.Height > neighborTile.Height + 1) // Gap is > 1 unit
+                            // 情况2: neighborTile (较低的) 尝试成为楼梯，连接到 currentTile (较高的锚点)
+                            // neighborTile 必须是 Ground 才能变成楼梯。
+                            // currentTile (锚点) 可以是 Ground 或另一个 Stair (连接到其底部)。
+                            else if (neighborTile.Type == TileType.Ground && neighborTile.Height < currentTile.Height &&
+                                     (currentTile.Type == TileType.Ground || currentTile.Type == TileType.Stair))
                             {
-                                if (_random.NextDouble() < slopeProbability) 
+                                 if (_random.NextDouble() < stairProbability)
                                 {
-                                    neighborTile.Height = currentTile.Height - 1;
-                                    neighborTile.Type = TileType.Ground; 
-                                    neighborTile.SlopeDir = SlopeDirection.None;
-
-                                    currentTile.Type = TileType.Slope;
-                                    currentTile.SlopeDir = directions[i];
-                                    slopesWereMadeThisPass = true; 
-                                    break; 
+                                    if (currentTile.Height == neighborTile.Height + 1) // 正好一级落差
+                                    {
+                                        neighborTile.Type = TileType.Stair;
+                                        neighborTile.Direction = check.dirFromNeighbor;
+                                        changesMadeThisPass = true;
+                                        // currentTile 本身没变，currentTileWasModifiedIntoStair 依然是 false
+                                    }
+                                    else if (currentTile.Height > neighborTile.Height + 1) // 落差大于一级
+                                    {
+                                        neighborTile.Height = currentTile.Height - 1; // 抬高 neighborTile 地基
+                                        neighborTile.Type = TileType.Stair;           // 在新地基上放楼梯
+                                        neighborTile.Direction = check.dirFromNeighbor;
+                                        changesMadeThisPass = true;
+                                    }
                                 }
+                            }
+
+                            if (currentTileWasModifiedIntoStair)
+                            {
+                                break; // currentTile 已经变成了楼梯，停止检查它的其他邻居
                             }
                         }
-                    }
+                    } 
                 }
-            }
-        } while (slopesWereMadeThisPass && iterations < maxIterations);
+            } 
+        } while (changesMadeThisPass && iterations < maxIterations);
     }
 }
