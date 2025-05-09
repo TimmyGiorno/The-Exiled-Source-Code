@@ -10,6 +10,7 @@ public class MapVisualizer : MonoBehaviour
 
     [Header("Platform Generation")]
     public int numberOfPlatforms = 15;
+    // ... (other platform parameters as before) ...
     public int minPlatformWidth = 3;
     public int maxPlatformWidth = 8;
     public int minPlatformLength = 3;
@@ -17,11 +18,11 @@ public class MapVisualizer : MonoBehaviour
     public int minPlatformHeight = 1; 
     public int maxPlatformHeight = 5; 
 
-    [Header("Terrain Noise")] // New section for Perlin noise parameters
+    [Header("Terrain Noise")]
     public float noiseScale = 0.1f;
-    [Range(0, 10)] // Amplitude as integer units of height change
+    [Range(0, 10)]
     public int noiseAmplitude = 2; 
-    public float noiseOffsetX = 100f; // Offset to get different noise patterns
+    public float noiseOffsetX = 100f; 
     public float noiseOffsetY = 100f;
 
     [Header("Generation Settings")]
@@ -54,11 +55,11 @@ public class MapVisualizer : MonoBehaviour
         _mapContainer = new GameObject("GeneratedMapContainer");
         _mapContainer.transform.SetParent(this.transform);
 
-        int effectiveLandingPadHeight = landingPadHeight; // Can directly use landingPadHeight
+        int effectiveLandingPadHeight = landingPadHeight;
 
         _mapGenerator = new MapGenerator(
             overallMapRadius, centerFlatRadius, effectiveLandingPadHeight,
-            noiseScale, noiseAmplitude, noiseOffsetX, noiseOffsetY, // Pass noise parameters
+            noiseScale, noiseAmplitude, noiseOffsetX, noiseOffsetY,
             mapSeed
         );
 
@@ -70,10 +71,29 @@ public class MapVisualizer : MonoBehaviour
             stairProbability
         );
 
-        DisplayMap();
+        DisplayMapWithOcclusionCulling(); // Changed method name for clarity
+    }
+
+    // Helper function to determine if a conceptual cell (x,y,h) is solid
+    private bool IsCellSolid(int x, int y, int h_level)
+    {
+        // Check grid boundaries
+        if (x < 0 || x >= _mapGenerator.GridWidth || y < 0 || y >= _mapGenerator.GridHeight)
+        {
+            return false; // Outside grid is considered air
+        }
+
+        Tile tileData = _mapGenerator.Tiles[x, y];
+        if (tileData.Type == TileType.Empty)
+        {
+            return false; // Empty-typed tiles are air
+        }
+
+        // A cell is solid if its height 'h_level' is at or below the surface height of its column
+        return h_level <= tileData.Height;
     }
     
-    void DisplayMap()
+    void DisplayMapWithOcclusionCulling() // Renamed for clarity
     {
         if (_mapGenerator == null || _mapGenerator.Tiles == null) { Debug.LogError("Map data not generated!"); return; }
         if (groundTilePrefab == null) { Debug.LogError("Ground Tile Prefab not assigned!"); return; }
@@ -82,98 +102,101 @@ public class MapVisualizer : MonoBehaviour
         float mapHalfGridWidth = _mapGenerator.GridWidth / 2.0f;
         float mapHalfGridDepth = _mapGenerator.GridHeight / 2.0f;
 
-        for (int y = 0; y < _mapGenerator.GridHeight; y++)
+        // 1. Determine the actual min and max surface heights in the generated map
+        int minSurfaceHeight = int.MaxValue;
+        int maxSurfaceHeight = int.MinValue;
+        bool mapHasAnySolidTiles = false;
+
+        for (int y_scan = 0; y_scan < _mapGenerator.GridHeight; y_scan++)
         {
-            for (int x = 0; x < _mapGenerator.GridWidth; x++)
+            for (int x_scan = 0; x_scan < _mapGenerator.GridWidth; x_scan++)
             {
-                Tile currentTileData = _mapGenerator.Tiles[x, y];
-
-                if (currentTileData.Type == TileType.Empty)
+                Tile tile = _mapGenerator.Tiles[x_scan, y_scan];
+                if (tile.Type != TileType.Empty)
                 {
-                    continue;
+                    mapHasAnySolidTiles = true;
+                    if (tile.Height < minSurfaceHeight) minSurfaceHeight = tile.Height;
+                    if (tile.Height > maxSurfaceHeight) maxSurfaceHeight = tile.Height;
                 }
+            }
+        }
 
-                GameObject tilePrefabToUse = null;
-                Quaternion tileRotation = Quaternion.identity;
-                
-                if (currentTileData.Type == TileType.Ground) 
-                { 
-                    tilePrefabToUse = groundTilePrefab; 
-                }
-                else if (currentTileData.Type == TileType.Stair) 
-                { 
-                    tilePrefabToUse = stairTilePrefab;
-                    switch (currentTileData.Direction)
+        if (!mapHasAnySolidTiles)
+        {
+            Debug.LogWarning("Map contains no solid tiles to display.");
+            return;
+        }
+        // If minSurfaceHeight remained int.MaxValue, it means all were Empty, handled by mapHasAnySolidTiles
+        // If noise can go very low, minSurfaceHeight could be quite negative.
+
+        // 2. Iterate through all conceptual block cells (x, y, h)
+        for (int h = minSurfaceHeight; h <= maxSurfaceHeight; h++) // Iterate through relevant height levels
+        {
+            for (int y_grid = 0; y_grid < _mapGenerator.GridHeight; y_grid++)
+            {
+                for (int x_grid = 0; x_grid < _mapGenerator.GridWidth; x_grid++)
+                {
+                    // 3. Is the current cell (x_grid, y_grid, h) solid?
+                    if (!IsCellSolid(x_grid, y_grid, h))
                     {
-                        case StairDirection.North: tileRotation = Quaternion.Euler(0, 180f, 0); break;
-                        case StairDirection.East:  tileRotation = Quaternion.Euler(0, 90f, 0);  break;
-                        case StairDirection.South: tileRotation = Quaternion.Euler(0, 0, 0); break;
-                        case StairDirection.West:  tileRotation = Quaternion.Euler(0, -90f, 0); break;
+                        continue; // This cell is air, nothing to render here.
                     }
-                }
-                 
-                if (tilePrefabToUse == null) continue;
 
-                Vector3 tileBasePosition = new Vector3(
-                    (x - mapHalfGridWidth + 0.5f) * tileSpacing,
-                    currentTileData.Height * heightStep,          
-                    (y - mapHalfGridDepth + 0.5f) * tileSpacing  
-                );
+                    // 4. Cell is solid. Check if it's exposed by checking its 6 neighbors.
+                    bool isExposed = false;
+                    if (!IsCellSolid(x_grid + 1, y_grid, h)) isExposed = true; // Right face exposed
+                    if (!isExposed && !IsCellSolid(x_grid - 1, y_grid, h)) isExposed = true; // Left face exposed
+                    if (!isExposed && !IsCellSolid(x_grid, y_grid + 1, h)) isExposed = true; // Front face (map Y+) exposed
+                    if (!isExposed && !IsCellSolid(x_grid, y_grid - 1, h)) isExposed = true; // Back face (map Y-) exposed
+                    if (!isExposed && !IsCellSolid(x_grid, y_grid, h + 1)) isExposed = true; // Top face exposed
+                    if (!isExposed && !IsCellSolid(x_grid, y_grid, h - 1)) isExposed = true; // Bottom face exposed
 
-                GameObject tileInstance = Instantiate(tilePrefabToUse, tileBasePosition, tileRotation);
-                tileInstance.transform.SetParent(_mapContainer.transform);
-                tileInstance.name = $"Tile_{x}_{y} (H:{currentTileData.Height}, T:{currentTileData.Type}, Dir:{currentTileData.Direction})";
-                
-                Renderer tileRenderer = tileInstance.GetComponent<Renderer>();
-                if (tileRenderer != null)
-                {
-                    tileRenderer.material.color = tileColor; // Use the uniform color
-                }
-
-                // --- Generate Support/Extension Blocks (Handles positive and negative heights relative to 0) ---
-                int tileH = currentTileData.Height;
-
-                if (tileH > 0) // Tile surface is above level 0, add supports from 0 up to tileH-1
-                {
-                    for (int h_s = 0; h_s < tileH; h_s++)
+                    if (isExposed)
                     {
-                        Vector3 supportPosition = new Vector3(
-                            tileBasePosition.x,    
-                            h_s * heightStep, 
-                            tileBasePosition.z     
+                        // This block needs to be rendered.
+                        Tile surfaceColumnData = _mapGenerator.Tiles[x_grid, y_grid]; // Get data for the column's top
+                        GameObject prefabToUse;
+                        Quaternion rotation = Quaternion.identity;
+
+                        // 5. Select prefab and rotation
+                        // If current block is the surface block of its column AND it's a stair type:
+                        if (h == surfaceColumnData.Height && surfaceColumnData.Type == TileType.Stair)
+                        {
+                            prefabToUse = stairTilePrefab;
+                            switch (surfaceColumnData.Direction)
+                            {
+                                case StairDirection.North: rotation = Quaternion.Euler(0, 180f, 0); break;
+                                case StairDirection.East:  rotation = Quaternion.Euler(0, 90f, 0);  break;
+                                case StairDirection.South: rotation = Quaternion.Euler(0, 0, 0);   break;
+                                case StairDirection.West:  rotation = Quaternion.Euler(0, -90f, 0); break;
+                            }
+                        }
+                        else
+                        {
+                            // Otherwise, it's a ground block (either a surface ground block or an internal block that's exposed)
+                            prefabToUse = groundTilePrefab;
+                        }
+                        
+                        Vector3 position = new Vector3(
+                            (x_grid - mapHalfGridWidth + 0.5f) * tileSpacing,
+                            h * heightStep, // Use the current height level 'h' for this block's Y position
+                            (y_grid - mapHalfGridDepth + 0.5f) * tileSpacing
                         );
-                        GameObject supportInstance = Instantiate(groundTilePrefab, supportPosition, Quaternion.identity);
-                        supportInstance.transform.SetParent(_mapContainer.transform);
-                        supportInstance.name = $"Tile_{x}_{y}_Support_PosH{h_s}";
-                        Renderer sr = supportInstance.GetComponent<Renderer>();
-                        if(sr != null) sr.material.color = tileColor;
-                    }
-                }
-                else if (tileH < 0) // Tile surface is below level 0, add "walls" from -1 down to tileH
-                {
-                    // These are essentially columns filling the space from just below the "0 plane" down to the tile.
-                    // The main tileInstance is already at tileH.
-                    // So, we fill levels from -1 down to tileH (inclusive, as these are full blocks).
-                    for (int h_s = -1; h_s >= tileH; h_s--) 
-                    {
-                        // We already placed the main tile at tileH, so skip if h_s is that exact level.
-                        // No, the main tile IS the surface. The loop means "place blocks at these levels".
-                        // If tileH = -1, loop places block at -1. This is correct.
-                        // If tileH = -2, loop places blocks at -1, -2. Correct.
-                        Vector3 extensionPosition = new Vector3(
-                            tileBasePosition.x,
-                            h_s * heightStep,
-                            tileBasePosition.z
-                        );
-                        GameObject extensionInstance = Instantiate(groundTilePrefab, extensionPosition, Quaternion.identity);
-                        extensionInstance.transform.SetParent(_mapContainer.transform);
-                        extensionInstance.name = $"Tile_{x}_{y}_Extension_NegH{h_s}";
-                        Renderer er = extensionInstance.GetComponent<Renderer>();
-                        if(er != null) er.material.color = tileColor;
+
+                        GameObject instance = Instantiate(prefabToUse, position, rotation);
+                        instance.transform.SetParent(_mapContainer.transform);
+                        // Naming can be more specific if needed, e.g., including 'h'
+                        instance.name = $"Block_{x_grid}_{y_grid}_H{h}"; 
+                        
+                        Renderer rend = instance.GetComponent<Renderer>();
+                        if (rend != null)
+                        {
+                            rend.material.color = tileColor; // Apply uniform color
+                        }
                     }
                 }
             }
         }
-        Debug.Log("Circular map with noise, flat center, and supports displayed!");
+        Debug.Log("Map displayed with hidden block culling!");
     }
 }
