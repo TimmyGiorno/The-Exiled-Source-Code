@@ -4,100 +4,90 @@ using RandomMapGenerator; // Ensure this is your correct namespace
 public class MapVisualizer : MonoBehaviour
 {
     [Header("Map Dimensions")]
-    public int overallMapRadius = 20;    // Overall radius of the generated circular map area
-    public int centerFlatRadius = 5;   // Radius of the flat landing zone in the center
-    public int landingPadHeight = 1;   // Height of the landing pad (recommend >= 0)
+    public int overallMapRadius = 20;
+    public int centerFlatRadius = 5;
+    public int landingPadHeight = 1; 
 
     [Header("Platform Generation")]
     public int numberOfPlatforms = 15;
     public int minPlatformWidth = 3;
     public int maxPlatformWidth = 8;
-    public int minPlatformLength = 3; // Corresponds to platform's depth/length along map's Y-grid axis
+    public int minPlatformLength = 3;
     public int maxPlatformLength = 8;
-    public int minPlatformHeight = 1;  // Min height for platforms (can be relative or absolute)
-    public int maxPlatformHeight = 5;  // Max height for platforms
+    public int minPlatformHeight = 1; 
+    public int maxPlatformHeight = 5; 
+
+    [Header("Terrain Noise")] // New section for Perlin noise parameters
+    public float noiseScale = 0.1f;
+    [Range(0, 10)] // Amplitude as integer units of height change
+    public int noiseAmplitude = 2; 
+    public float noiseOffsetX = 100f; // Offset to get different noise patterns
+    public float noiseOffsetY = 100f;
 
     [Header("Generation Settings")]
     public double stairProbability = 0.75;
-    public int? mapSeed = null; // Nullable int for optional seed
+    public int? mapSeed = null; 
 
     [Header("Visuals")]
-    public GameObject groundTilePrefab; // Prefab for ground and platform tops
-    public GameObject stairTilePrefab;  // Prefab for stairs
-    public float tileSpacing = 1.0f;   // Spacing between tile centers (usually tile size)
-    public float heightStep = 0.5f;    // Actual Y-axis distance in Unity units per height unit
-    public Color defaultTileColor = Color.gray; // Uniform color for all tiles
+    public GameObject groundTilePrefab;
+    public GameObject stairTilePrefab;
+    public float tileSpacing = 1.0f;
+    public float heightStep = 0.5f;
+    public Color tileColor = Color.gray; 
 
     private MapGenerator _mapGenerator;
-    private GameObject _mapContainer; // Parent object for all instantiated tiles
+    private GameObject _mapContainer;
 
     void Start()
     {
         GenerateAndDisplayMap();
     }
 
-    // Allows triggering map generation from the Inspector context menu
     [ContextMenu("Generate and Display Map")]
     public void GenerateAndDisplayMap()
     {
-        // Clean up old map if it exists
         if (_mapContainer != null)
         {
-            // Use DestroyImmediate if called from editor mode (e.g., via ContextMenu)
             if (Application.isPlaying) Destroy(_mapContainer);
             else DestroyImmediate(_mapContainer);
         }
         _mapContainer = new GameObject("GeneratedMapContainer");
-        _mapContainer.transform.SetParent(this.transform); // Make it a child of this GameObject
+        _mapContainer.transform.SetParent(this.transform);
 
-        // Ensure landingPadHeight is not negative for simpler platform height calculations later
-        int effectiveLandingPadHeight = Mathf.Max(0, landingPadHeight);
+        int effectiveLandingPadHeight = landingPadHeight; // Can directly use landingPadHeight
 
-        // Initialize the map generator with new parameters
-        _mapGenerator = new MapGenerator(overallMapRadius, centerFlatRadius, effectiveLandingPadHeight, mapSeed);
+        _mapGenerator = new MapGenerator(
+            overallMapRadius, centerFlatRadius, effectiveLandingPadHeight,
+            noiseScale, noiseAmplitude, noiseOffsetX, noiseOffsetY, // Pass noise parameters
+            mapSeed
+        );
 
-        // Generate map data
         _mapGenerator.GenerateMap(
             numberOfPlatforms,
             minPlatformWidth, maxPlatformWidth,
             minPlatformLength, maxPlatformLength,
-            minPlatformHeight, maxPlatformHeight, // maxPlatformHeight here is passed as actualMaxPlatformHeight
+            minPlatformHeight, maxPlatformHeight,
             stairProbability
         );
 
-        // Visualize the generated map data
         DisplayMap();
     }
     
     void DisplayMap()
     {
-        if (_mapGenerator == null || _mapGenerator.Tiles == null) 
-        {
-            Debug.LogError("Map data not generated!");
-            return; 
-        }
-        if (groundTilePrefab == null) 
-        {
-            Debug.LogError("Ground Tile Prefab not assigned in MapVisualizer!");
-            return; 
-        }
-        if (stairTilePrefab == null) 
-        {
-            Debug.LogError("Stair Tile Prefab not assigned in MapVisualizer!");
-            return; 
-        }
+        if (_mapGenerator == null || _mapGenerator.Tiles == null) { Debug.LogError("Map data not generated!"); return; }
+        if (groundTilePrefab == null) { Debug.LogError("Ground Tile Prefab not assigned!"); return; }
+        if (stairTilePrefab == null) { Debug.LogError("Stair Tile Prefab not assigned!"); return; }
 
-        // Calculate offset to center the map visuals in the world based on the grid dimensions
         float mapHalfGridWidth = _mapGenerator.GridWidth / 2.0f;
-        float mapHalfGridDepth = _mapGenerator.GridHeight / 2.0f; // GridHeight corresponds to map's Z-axis depth
+        float mapHalfGridDepth = _mapGenerator.GridHeight / 2.0f;
 
-        for (int y = 0; y < _mapGenerator.GridHeight; y++) // Iterate through map's depth (grid Y)
+        for (int y = 0; y < _mapGenerator.GridHeight; y++)
         {
-            for (int x = 0; x < _mapGenerator.GridWidth; x++) // Iterate through map's width (grid X)
+            for (int x = 0; x < _mapGenerator.GridWidth; x++)
             {
                 Tile currentTileData = _mapGenerator.Tiles[x, y];
 
-                // Skip rendering Empty tiles
                 if (currentTileData.Type == TileType.Empty)
                 {
                     continue;
@@ -106,7 +96,6 @@ public class MapVisualizer : MonoBehaviour
                 GameObject tilePrefabToUse = null;
                 Quaternion tileRotation = Quaternion.identity;
                 
-                // Select prefab and rotation based on tile type and direction
                 if (currentTileData.Type == TileType.Ground) 
                 { 
                     tilePrefabToUse = groundTilePrefab; 
@@ -114,72 +103,77 @@ public class MapVisualizer : MonoBehaviour
                 else if (currentTileData.Type == TileType.Stair) 
                 { 
                     tilePrefabToUse = stairTilePrefab;
-                    // Assuming default stair model ascends towards its local +Z axis (Unity's forward)
                     switch (currentTileData.Direction)
                     {
-                        case StairDirection.North: // Ascends towards world Z- (if map Y is world Z)
-                            tileRotation = Quaternion.Euler(0, 180f, 0); 
-                            break;
-                        case StairDirection.East:  // Ascends towards world X+
-                            tileRotation = Quaternion.Euler(0, 90f, 0);  
-                            break;
-                        case StairDirection.South: // Ascends towards world Z+
-                            tileRotation = Quaternion.Euler(0, 0, 0); // Default orientation
-                            break;
-                        case StairDirection.West:  // Ascends towards world X-
-                            tileRotation = Quaternion.Euler(0, -90f, 0); 
-                            break;
+                        case StairDirection.North: tileRotation = Quaternion.Euler(0, 180f, 0); break;
+                        case StairDirection.East:  tileRotation = Quaternion.Euler(0, 90f, 0);  break;
+                        case StairDirection.South: tileRotation = Quaternion.Euler(0, 0, 0); break;
+                        case StairDirection.West:  tileRotation = Quaternion.Euler(0, -90f, 0); break;
                     }
                 }
                  
-                if (tilePrefabToUse == null) continue; // Should not happen if Empty is handled
+                if (tilePrefabToUse == null) continue;
 
-                // Calculate world position for the base of the tile
-                // Map X -> World X
-                // Tile Height -> World Y
-                // Map Y (depth) -> World Z
                 Vector3 tileBasePosition = new Vector3(
-                    (x - mapHalfGridWidth + 0.5f) * tileSpacing,  // Center X
-                    currentTileData.Height * heightStep,          // Set Y based on tile's base height
-                    (y - mapHalfGridDepth + 0.5f) * tileSpacing   // Center Z (using map's Y as depth)
+                    (x - mapHalfGridWidth + 0.5f) * tileSpacing,
+                    currentTileData.Height * heightStep,          
+                    (y - mapHalfGridDepth + 0.5f) * tileSpacing  
                 );
 
                 GameObject tileInstance = Instantiate(tilePrefabToUse, tileBasePosition, tileRotation);
                 tileInstance.transform.SetParent(_mapContainer.transform);
                 tileInstance.name = $"Tile_{x}_{y} (H:{currentTileData.Height}, T:{currentTileData.Type}, Dir:{currentTileData.Direction})";
                 
-                // --- Appearance Adjustment: Apply uniform color ---
                 Renderer tileRenderer = tileInstance.GetComponent<Renderer>();
                 if (tileRenderer != null)
                 {
-                    tileRenderer.material.color = defaultTileColor;
+                    tileRenderer.material.color = tileColor; // Use the uniform color
                 }
 
-                // --- Generate Support Blocks ---
-                // Support blocks are needed if the tile's base height is above 0 (or above a designated ground level)
-                if (currentTileData.Height > 0) // Or currentTileData.Height > absoluteGroundLevel if you have one
+                // --- Generate Support/Extension Blocks (Handles positive and negative heights relative to 0) ---
+                int tileH = currentTileData.Height;
+
+                if (tileH > 0) // Tile surface is above level 0, add supports from 0 up to tileH-1
                 {
-                    for (int h_support = 0; h_support < currentTileData.Height; h_support++)
+                    for (int h_s = 0; h_s < tileH; h_s++)
                     {
                         Vector3 supportPosition = new Vector3(
-                            tileBasePosition.x,     // Align X with the tile above
-                            h_support * heightStep, // Y position for each support block layer
-                            tileBasePosition.z      // Align Z with the tile above
+                            tileBasePosition.x,    
+                            h_s * heightStep, 
+                            tileBasePosition.z     
                         );
-
-                        GameObject supportTileInstance = Instantiate(groundTilePrefab, supportPosition, Quaternion.identity);
-                        supportTileInstance.transform.SetParent(_mapContainer.transform);
-                        supportTileInstance.name = $"Tile_{x}_{y}_Support_H{h_support}";
-                        
-                        Renderer supportRenderer = supportTileInstance.GetComponent<Renderer>();
-                        if (supportRenderer != null)
-                        {
-                            supportRenderer.material.color = defaultTileColor; // Also use default color for supports
-                        }
+                        GameObject supportInstance = Instantiate(groundTilePrefab, supportPosition, Quaternion.identity);
+                        supportInstance.transform.SetParent(_mapContainer.transform);
+                        supportInstance.name = $"Tile_{x}_{y}_Support_PosH{h_s}";
+                        Renderer sr = supportInstance.GetComponent<Renderer>();
+                        if(sr != null) sr.material.color = tileColor;
+                    }
+                }
+                else if (tileH < 0) // Tile surface is below level 0, add "walls" from -1 down to tileH
+                {
+                    // These are essentially columns filling the space from just below the "0 plane" down to the tile.
+                    // The main tileInstance is already at tileH.
+                    // So, we fill levels from -1 down to tileH (inclusive, as these are full blocks).
+                    for (int h_s = -1; h_s >= tileH; h_s--) 
+                    {
+                        // We already placed the main tile at tileH, so skip if h_s is that exact level.
+                        // No, the main tile IS the surface. The loop means "place blocks at these levels".
+                        // If tileH = -1, loop places block at -1. This is correct.
+                        // If tileH = -2, loop places blocks at -1, -2. Correct.
+                        Vector3 extensionPosition = new Vector3(
+                            tileBasePosition.x,
+                            h_s * heightStep,
+                            tileBasePosition.z
+                        );
+                        GameObject extensionInstance = Instantiate(groundTilePrefab, extensionPosition, Quaternion.identity);
+                        extensionInstance.transform.SetParent(_mapContainer.transform);
+                        extensionInstance.name = $"Tile_{x}_{y}_Extension_NegH{h_s}";
+                        Renderer er = extensionInstance.GetComponent<Renderer>();
+                        if(er != null) er.material.color = tileColor;
                     }
                 }
             }
         }
-        Debug.Log("Circular map with flat center displayed!");
+        Debug.Log("Circular map with noise, flat center, and supports displayed!");
     }
 }
