@@ -27,7 +27,7 @@ public class MapGenerator
         double slopeProbability)
     {
         // 存储最大平台高度，供 CreateSlopes 方法使用
-        this._maxPlatformHeightForSlopeGeneration = actualMaxPlatformHeight;
+        _maxPlatformHeightForSlopeGeneration = actualMaxPlatformHeight;
 
         InitializeTiles();
         CreatePlatforms(numberOfPlatforms, minPlatformWidth, maxPlatformWidth, minPlatformLength, maxPlatformLength, minPlatformHeight, actualMaxPlatformHeight);
@@ -36,14 +36,14 @@ public class MapGenerator
 
     private void InitializeTiles()
     {
-        for (int y = 0; y < HeightMap; y++)
+        for (var y = 0; y < HeightMap; y++)
         {
-            for (int x = 0; x < Width; x++)
+            for (var x = 0; x < Width; x++)
             {
                 Tiles[x, y] = new Tile(x, y)
                 {
-                    Height = 0, // 初始地面高度为0
-                    Type = TileType.Ground // 初始所有地块都是地面
+                    Height = 0,
+                    Type = TileType.Ground
                 };
             }
         }
@@ -55,29 +55,28 @@ public class MapGenerator
         int minPlatformLength, int maxPlatformLength,
         int minPlatformHeight, int actualMaxPlatformHeight)
     {
-        for (int i = 0; i < numberOfPlatforms; i++)
+        for (var i = 0; i < numberOfPlatforms; i++)
         {
-            int platformWidth = _random.Next(minPlatformWidth, maxPlatformWidth + 1);
-            int platformLength = _random.Next(minPlatformLength, maxPlatformLength + 1);
-            // 确保平台高度至少为1，这样才有意义（相对于基础地面0）
-            int platformHeight = _random.Next(Math.Max(1, minPlatformHeight), actualMaxPlatformHeight + 1);
-
+            var platformWidth = _random.Next(minPlatformWidth, maxPlatformWidth + 1);
+            var platformLength = _random.Next(minPlatformLength, maxPlatformLength + 1);
+            var platformHeight = _random.Next(Math.Max(1, minPlatformHeight), actualMaxPlatformHeight + 1);
+            
+            // Edge Condition
             if (platformWidth <= 0 || platformLength <= 0) continue;
-            // 确保平台起始点计算不会导致宽度/长度超出边界
             if (Width - platformWidth < 0 || HeightMap - platformLength < 0) continue;
+            
+            // Select Start Point
+            var startX = _random.Next(0, Width - platformWidth + 1);
+            var startY = _random.Next(0, HeightMap - platformLength + 1);
 
-
-            int startX = _random.Next(0, Width - platformWidth + 1);
-            int startY = _random.Next(0, HeightMap - platformLength + 1);
-
-            for (int y = startY; y < startY + platformLength; y++)
+            for (var y = startY; y < startY + platformLength; y++)
             {
-                for (int x = startX; x < startX + platformWidth; x++)
+                for (var x = startX; x < startX + platformWidth; x++)
                 {
-                    // 新平台总是覆盖旧的，或者可以根据高度决定
+                    // Overwrite
                     Tiles[x, y].Height = platformHeight;
-                    Tiles[x, y].Type = TileType.Ground; // 平台表面是普通地面
-                    Tiles[x, y].SlopeDir = SlopeDirection.None; // 重置可能存在的旧斜面信息
+                    Tiles[x, y].Type = TileType.Ground; 
+                    Tiles[x, y].SlopeDir = SlopeDirection.None;
                 }
             }
         }
