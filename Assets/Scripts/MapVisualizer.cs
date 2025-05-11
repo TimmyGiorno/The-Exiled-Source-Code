@@ -10,7 +10,6 @@ public class MapVisualizer : MonoBehaviour
 
     [Header("Platform Generation")]
     public int numberOfPlatforms = 15;
-    // ... (other platform parameters as before) ...
     public int minPlatformWidth = 3;
     public int maxPlatformWidth = 8;
     public int minPlatformLength = 3;
@@ -71,7 +70,7 @@ public class MapVisualizer : MonoBehaviour
             stairProbability
         );
 
-        DisplayMapWithOcclusionCulling(); // Changed method name for clarity
+        DisplayMapWithOcclusionCulling();
     }
 
     // Helper function to determine if a conceptual cell (x,y,h) is solid
@@ -93,7 +92,7 @@ public class MapVisualizer : MonoBehaviour
         return h_level <= tileData.Height;
     }
     
-    void DisplayMapWithOcclusionCulling() // Renamed for clarity
+    void DisplayMapWithOcclusionCulling() 
     {
         if (_mapGenerator == null || _mapGenerator.Tiles == null) { Debug.LogError("Map data not generated!"); return; }
         if (groundTilePrefab == null) { Debug.LogError("Ground Tile Prefab not assigned!"); return; }

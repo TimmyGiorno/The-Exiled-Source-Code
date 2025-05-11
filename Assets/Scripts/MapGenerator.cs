@@ -1,8 +1,7 @@
-// MapGenerator.cs
 using System;
 using System.Linq;
-using UnityEngine; // Required for Vector2, Mathf, PerlinNoise
-using RandomMapGenerator; // Ensure this is your correct namespace
+using UnityEngine; 
+using RandomMapGenerator; 
 
 public class MapGenerator
 {
@@ -19,7 +18,7 @@ public class MapGenerator
 
     // Perlin Noise Parameters
     private float _noiseScale;
-    private int _noiseAmplitude; // Max height change due to noise (can be positive or negative)
+    private int _noiseAmplitude;
     private float _noiseOffsetX;
     private float _noiseOffsetY;
 
@@ -31,7 +30,7 @@ public class MapGenerator
         _centerFlatRadius = Mathf.Clamp(centerFlatRadius, 0, _overallMapRadius);
         _landingPadHeight = landingPadHeight;
 
-        _noiseScale = Mathf.Max(0.001f, noiseScale); // Prevent scale from being too small or zero
+        _noiseScale = Mathf.Max(0.001f, noiseScale); 
         _noiseAmplitude = noiseAmplitude;
         _noiseOffsetX = noiseOffsetX;
         _noiseOffsetY = noiseOffsetY;
@@ -50,7 +49,7 @@ public class MapGenerator
         int minPlatformHeight, int actualMaxPlatformHeight,
         double stairProbability)
     {
-        InitializeTilesAndApplyNoise(); // Renamed and noise logic added
+        InitializeTilesAndApplyNoise(); 
         CreatePlatforms(numberOfPlatforms, minPlatformWidth, maxPlatformWidth, minPlatformLength, maxPlatformLength, minPlatformHeight, actualMaxPlatformHeight);
         
         int maxIterations = Math.Max(3, actualMaxPlatformHeight + Mathf.Abs(_landingPadHeight) + _noiseAmplitude + 5);
@@ -109,9 +108,8 @@ public class MapGenerator
             var platformWidth = _random.Next(minPlatformWidth, maxPlatformWidth + 1);
             var platformLength = _random.Next(minPlatformLength, maxPlatformLength + 1);
             // Platform heights are absolute, chosen within a range.
-            // This range should consider the landing pad height.
             var platformHeight = _random.Next(
-                Mathf.Max(_landingPadHeight, minPlatformHeight), // Ensure platform is at least as high as landing pad or minPlatformHeight
+                Mathf.Max(_landingPadHeight, minPlatformHeight), 
                 actualMaxPlatformHeight + 1
             );
             
@@ -143,18 +141,6 @@ public class MapGenerator
 
     private void CreateStairsIterative(double stairProbability, int maxIterations)
     {
-        // This method's internal logic remains largely the same as the previous version,
-        // as it operates on the .Height and .Type properties which are now
-        // initialized with noise or set by platforms.
-        // The checks for _centerFlatRadius and _landingPadHeight are still crucial.
-
-        // Ensure that newLowHeight calculation in gap-fill for stairs leading to landing pad
-        // correctly results in _landingPadHeight - 1.
-        // And the condition `if (newLowHeight < 0)` should be carefully considered.
-        // If landingPadHeight is 0, a stair leading down to it would have base height -1. This is now allowed.
-        // So, `if (newLowHeight < 0 && _landingPadHeight != 0)` might be a more precise skip for negative heights not related to a 0-level landing pad.
-        // Or, more simply, just `if (newLowHeight < _some_minimum_allowed_height) continue;` where minimum_allowed_height could be, e.g., -_noiseAmplitude or a fixed value.
-        // For now, the previous logic for newLowHeight < 0 should generally work if negative heights are small.
 
         bool changesMadeThisPass;
         int iterations = 0;
@@ -241,9 +227,6 @@ public class MapGenerator
                                     {
                                         newLowHeight = _landingPadHeight - 1;
                                     }
-                                    // Negative heights are now generally allowed.
-                                    // No specific check here for newLowHeight < 0, unless you want a hard minimum floor.
-                                    // Example: if (newLowHeight < -_noiseAmplitude*2) continue; 
 
                                     potentialLow.Height = newLowHeight;
                                     potentialLow.Type = TileType.Stair;

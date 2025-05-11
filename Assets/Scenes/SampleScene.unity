@@ -423,20 +423,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   overallMapRadius: 50
   centerFlatRadius: 5
-  landingPadHeight: 1
-  numberOfPlatforms: 15
-  minPlatformWidth: 3
+  landingPadHeight: 10
+  numberOfPlatforms: 10
+  minPlatformWidth: 5
   maxPlatformWidth: 8
-  minPlatformLength: 3
+  minPlatformLength: 5
   maxPlatformLength: 8
-  minPlatformHeight: 1
-  maxPlatformHeight: 50
-  stairProbability: 0.45
+  minPlatformHeight: 20
+  maxPlatformHeight: 30
+  noiseScale: 0.1
+  noiseAmplitude: 2
+  noiseOffsetX: 100
+  noiseOffsetY: 100
+  stairProbability: 0.3
   groundTilePrefab: {fileID: 144001084732454522, guid: 180d85a51e5a7b9419247d8773e08e62, type: 3}
   stairTilePrefab: {fileID: 8153039646197318604, guid: b73d74b298bc2184c90dcef5ebfd54e0, type: 3}
   tileSpacing: 1
   heightStep: 0.5
-  defaultTileColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  tileColor: {r: 0.254902, g: 0.4117647, b: 0.882353, a: 1}
 --- !u!4 &1409756107
 Transform:
   m_ObjectHideFlags: 0
